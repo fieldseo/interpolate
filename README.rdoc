@@ -1,0 +1,254 @@
+
+= Interpolate
+
+To do "string interpolation" after a string has already been 
+created as many times as desired.  The String#interpolate 
+method is Monkey Patched into the Core String Ruby class, but it 
+is monkeyed patched resopnaabley using a seperate module that has 
+the "interpolate" method in it and then that module is mixed into
+the String class like so,
+
+module Interpolate
+  module MonkeyPatch
+    def interpolate
+      # put actual code here
+    end
+  end
+  class ::String
+    include ::Interpolate::MonkeyPatch
+  end
+end
+
+That way, it will be essier to isolate any problems.
+
+
+== Limitations
+
+String#interpolate will only interpolate for local methods.  It will not 
+work to call a method or to evaluate other ruby code inside the #{pattern}.
+Example:
+def m; "HI"; end
+'will not run the #{m} method'.interpolate() {}  #does nothing!
+'will not add 1 + 1 =#{1 + 1}'.interpolate() {}  #does nothing!
+
+But look at the Methods section below for some work around ideas if you 
+must have the extra functionality. 
+
+
+== String Interploation Background Information
+
+Normal string interplation happends when a string is created using a string literal.
+For example, given this:
+
+   first    = "Field"
+   last     = "S."
+   a_string = "My name is #{first} #{last} and I like Ruby, long walks on the beach..."
+
+The value of a_string is "My name is Field S. and I like Ruby, long walks on the beach..."
+
+BUT, if you read the string from a file or created the string using single quotes (')
+such as this:
+
+   a_string = 'My name is #{first} #{last} and I like Ruby, long walks on the beach...'
+
+then, the value of a_string would be 'My name is #{first} #{last} and I like Ruby, long walks on the beach...'
+
+BUT NOW WITH, the monkey patched String#interpolate method you can.
+
+   first  = "FIELD"
+   last   = "S."
+   result = a_string.interplote {}   # YOU MUST SEND IN A BLOCK!!!  Look at Syntax & Usage Below.
+   newstr # => 'My name is FIELD S. and I like Ruby, long walks on the beach...'
+
+I find that being able to delay string interpolation to be very useful at times.
+
+
+== Definition Of Terms
+
+The "Interpolation String" (referanced in code as 'interpolation_string') is the 
+string that the #{somevar} patterns are evluated within.  The Interpolation 
+String is just a plain old string just like any other string.  It can have 
+one #{somevar} pattern within it, more than one #{othervar} patterns or it 
+can have NO #{something} patterns within it.
+
+  * If the Interpolation String has no #{somevar} patterns within it, 
+    then the Interpolation String will equal the "Result String" 
+    (referanced in code as 'result_string')
+    Example: 
+    interpolation_string = "the is the interpolation sting"
+    result_string        = interpolation_string.interpolate() {}
+    result_string     # => "the is the interpolation sting"
+    
+  * If it does have one or more #{var01} patterns (and there are corresponding 
+    local variables defined) those local variable values will replace the 
+    #{somevar} patterns.
+    Example:
+    a="Hello"
+    b="World"
+    interpolation_string = "This is a standard #{a} #{b} example."
+    result_string        = interpolation_string.interpolate() {}
+    result_string     # => "This is a standard Hello World example!"
+
+
+== String#interpolate Usage Most Like Normal Interpolation
+
+Normal Interpolation,
+
+  a_local_var = "I am the value of a_local_var"
+  test_string = "we have >>>#{a_local_var}<<<. We do not have >>>#{not_local_var}<<<" # **
+                # **Causes Expetion becouse not_local_var is not a local variable**
+  
+For String#interpolate('') {},
+
+  a_local_var = "I am the value of a_local_var"
+  test_string = 'we have >>>#{a_local_var}<<< but we do not have >>>#{not_local_var}<<<'
+
+  result      = test_string.interpolate('') {}
+  result # => 'we have >>>I am the value of a_local_var<<< but we do not have >>><<<'
+  
+So, for normal interpolation we try to interplate for a undefined local variable we get an
+exception, but for String#interpolate('') {} we get an empty string value ('') for any undefined
+local variable.
+
+But, String#interpolate has many other options.  Here is an important one:
+
+   result   =   test_string.interpolate() {}  # Notice we do NOT have '' inside the ()
+   result # => 'we have >>>I am the value of a_local_var<<< but we do not have >>>#{not_local_var}<<<'
+   
+NOTICE HOW the result string still has #{not_local_var} in it!!!
+
+BACK TO Normal Interpolation,
+
+  a_local_var = "I am the value of a_local_var"
+  test_string = "we have >>>#{a_local_var}<<<"
+  test_string # => we have >>>I am the value of a_local_var<<<
+  
+In this case String#interpolate('') {} and String#interpolate() {} produce the same result as the above normal interpolation,
+
+  a_local_var = "I am the value of a_local_var"
+  test_string = 'we have >>>#{a_local_var}<<<'
+
+  result      = test_string.interpolate('') {}
+  result # => 'we have >>>I am the value of a_local_var<<<'
+
+  result      = test_string.interpolate() {}
+  result # => 'we have >>>I am the value of a_local_var<<<'
+
+
+== Why I Like Using The 'String#interpolate() {}' form
+
+If the string i am interpolating local variables on has #{some_variable}, where "some_variable" is 
+not a defined local variable the resulting string of String#interpolate() {} will leave the #{some_variable} 
+along in the orgingial string.
+
+Compare These Examples:
+
+  'some text #{some_variable} more text'.interpolate() {}      # => 'some text #{some_variable} more text'
+  'some text #{some_variable} more text'.interpolate('') {}    # => 'some text  more text'
+  'some text #{some_variable} more text'.interpolate('-X-') {} # => 'some text -X- more text'
+  
+Note That "String#interpolate('') {}" is the most like normal string interpolation but the most 
+useful(IMO) is the "String#interpolate() {}"
+
+
+== Install
+
+gem install interpolate
+require 'interpolate'
+
+
+== Syntax
+
+String#interpolate {}
+String#interpolate {:local_var_a}
+String#interpolate {[:local_var_a, :local_var_b, ...]}
+String#interpolate("default string") {}
+String#interpolate("default string") {:local_var_a}
+String#interpolate("default string") {[:local_var_a, :local_var_b, ...]}
+
+   Where: :local_var_a, :local_var_b, :local_var_c are just symbols that name 
+          the local variable you want to interpolate the string with.
+
+   NOTE:  The block can be more complicated than what is listed above.  The 
+          result of the block (the value that is passes back to the 
+          interpolate method) must be either nil, a symbol or an array of 
+          symbols.  How the block produces these values is up to the user of
+          the method but in almost all cases can just be as simple as {}, 
+          {:a_var} or {[:a_var, :b_var, :c_var]}.
+          
+NOTE:  "String#interpolate {}", "String#interpolate() {}" and "String#interpolate(nil) {}" are
+       all the same thing!
+
+
+== Usage
+
+Look at the "./demo.rb" file for more detail.  To really get an understanding of
+String#interpolate read the demo.rb file and run it!
+
+Given that:
+interpolation_string = '#{a}...#{b}...#{c}...#{d}'
+
+Here are some of the results:
+
+------------------------------------------
+interpolation_string.interpolate {}               # => A...B......#{d}
+interpolation_string.interpolate {:a}             # => A...#{b}...#{c}...#{d}
+interpolation_string.interpolate {:b}             # => #{a}...B...#{c}...#{d}
+interpolation_string.interpolate {:c}             # => #{a}...#{b}......#{d}
+interpolation_string.interpolate {:d}             # => #{a}...#{b}...#{c}...#{d}
+interpolation_string.interpolate {[:a,:b]}        # => A...B...#{c}...#{d}
+interpolation_string.interpolate {[:a,:c]}        # => A...#{b}......#{d}
+interpolation_string.interpolate {[:a,:d]}        # => A...#{b}...#{c}...#{d}
+
+------------------------------------------
+interpolation_string.interpolate('-X-') {}        # => A...B......-X-
+interpolation_string.interpolate('-X-') {:a}      # => A...#{b}...#{c}...#{d}
+interpolation_string.interpolate('-X-') {:b}      # => #{a}...B...#{c}...#{d}
+interpolation_string.interpolate('-X-') {:c}      # => #{a}...#{b}......#{d}
+interpolation_string.interpolate('-X-') {:d}      # => #{a}...#{b}...#{c}...-X-
+interpolation_string.interpolate('-X-') {[:a,:b]} # => A...B...#{c}...#{d}
+interpolation_string.interpolate('-X-') {[:a,:c]} # => A...#{b}......#{d}
+interpolation_string.interpolate('-X-') {[:a,:d]} # => A...#{b}...#{c}...-X-
+
+------------------------------------------
+interpolation_string.interpolate('') {}           # => A...B......
+interpolation_string.interpolate('') {:a}         # => A...#{b}...#{c}...#{d}
+interpolation_string.interpolate('') {:b}         # => #{a}...B...#{c}...#{d}
+interpolation_string.interpolate('') {:c}         # => #{a}...#{b}......#{d}
+interpolation_string.interpolate('') {:d}         # => #{a}...#{b}...#{c}...
+interpolation_string.interpolate('') {[:a,:b]}    # => A...B...#{c}...#{d}
+interpolation_string.interpolate('') {[:a,:c]}    # => A...#{b}......#{d}
+interpolation_string.interpolate('') {[:a,:d]}    # => A...#{b}...#{c}...
+
+
+== Methods (We DONT support method interpolation, BUT...)
+
+We have a dumdummethod defined as:
+
+  def dumdummethod
+    "this is the value of the dumdummethod"
+  end
+
+And our test_string is:
+
+  test_string = "the dum dum method value is >>>#{dumdummethod}<<<"
+  
+Our String#interpolate results would be,
+
+  test_string.interpolate() {}   # => "the dum dum method value is >>>#{dumdummethod}<<<"
+  test_string.interpolate('') {} # => "the dum dum method value is >>><<<"
+  
+But if we define a new local variable and change the interpolation string (test_string) first,
+
+  dumdummethod_local_variable = dumdummethod
+  test_string = gsub( '#{dumdummethod}', '#{dumdummethod_local_variable}')
+
+And then our new results for String#interpolate are,
+
+  test_string.interpolate() {}   # => "the dum dum method value is >>>this is the value of the dumdummethod<<<"
+  test_string.interpolate('') {} # => "the dum dum method value is >>>this is the value of the dumdummethod<<<"
+  
+To see an actual demo of this, look at "./demo-method.rb"
+
+
+
